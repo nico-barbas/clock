@@ -17,7 +17,6 @@ const
   moonWidth = 50
   moonHeight = 50
   spriteFrameTime = 0.15
-  nightfallHour = 19
 
 var
   font: Font
@@ -67,6 +66,8 @@ var
   bg: Texture
 
   forecastClient: HttpClient
+  sunrise: DateTime
+  sunset: DateTime
 
 proc close()
 
@@ -118,15 +119,20 @@ proc init() =
 
   # http client
   forecastClient = newHttpClient()
-  let response = forecastClient.get("https://api.openweathermap.org/data/2.5/onecall?lat=48.864716&lon=2.349014&exclude=minutely,hourly,alerts&appid=0e6f5398c15d486c091b9db6d8238f4f")
-  echo(response.status)
-  let jsonNode = parseJson(response.body)
-#   echo jsonNode
-  let current = jsonNode["current"]
-  echo current
-  let sunrise = current["sunrise"].getInt
-  var sunriseTime = fromUnix(sunrise)
-  echo sunriseTime.format("HH-mm-ss")
+  let response = forecastClient.get("https://api.openweathermap.org/data/2.5/onecall?lat=48.864716&lon=2.349014&exclude=minutely,hourly,daily,alerts&appid=0e6f5398c15d486c091b9db6d8238f4f")
+  if response.status == "200 OK":
+    let jsonNode = parseJson(response.body)
+    doAssert(jsonNode.kind == JObject)
+    let currentReport = jsonNode["current"]
+    doAssert(currentReport.kind == JObject)
+    let unixSunrise = currentReport["sunrise"]
+    let unixSunset = currentReport["sunset"]
+    doAssert(unixSunrise.kind == JInt)
+    doAssert(unixSunset.kind == JInt)
+    sunrise = fromUnix(unixSunrise.getInt()).utc()
+    sunset = fromUnix(unixSunset.getInt()).utc()
+  else:
+    echo "Failed to connect to OpenWeatherMap.org and retrieve weather forecast"
 
 
 
@@ -137,7 +143,9 @@ proc update() =
     spriteIndex += 1
 
   time = now()
-  if time.hour >= nightfallHour:
+  if time.hour >= sunrise.hour and time.hour <= sunset.hour:
+    dayState = Day
+  else:
     dayState = Night
   hours.text = time.format("HH")
   minutes.text = time.format("mm")
@@ -145,7 +153,7 @@ proc update() =
 
   closeBtn.updateButton(
      getMousePosition(),
-     isMouseButtonDown(MouseButton.LEFT_BUTTON.cint),
+     isMouseButtonDown(MouseButton.LEFT.cint),
     )
 
 proc draw() =
@@ -177,7 +185,8 @@ proc draw() =
         width: spriteBounds.x,
         height: spriteBounds.y,
       ),
-      Rectangle(x: 0, y: 0, width: spriteBounds.x, height: spriteBounds.y),
+      Rectangle(x: (windowWidth/2) - (spriteBounds.x/2), y: 10,
+          width: spriteBounds.x, height: spriteBounds.y),
       vec2Zero, 0,
       White,
     )
@@ -210,8 +219,9 @@ proc close() =
   isRunning = false
 
 proc main() =
-  setConfigFlags(WINDOW_UNDECORATED.cuint)
+  # setConfigFlags(WINDOW_UNDECORATED.cuint)
   setConfigFlags(VSYNC_HINT.cuint)
+  setTraceLogLevel(FATAL.cint)
   initWindow(300, 400, "Simple Clock")
   setTargetFPS(60)
   init()
