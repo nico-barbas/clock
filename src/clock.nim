@@ -1,5 +1,6 @@
 import std/times
 import std/httpClient
+import std/json
 import nimraylib_now/raylib
 import button
 
@@ -117,7 +118,15 @@ proc init() =
 
   # http client
   forecastClient = newHttpClient()
-  echo forecastClient.getContent("https://google.com")
+  let response = forecastClient.get("https://api.openweathermap.org/data/2.5/onecall?lat=48.864716&lon=2.349014&exclude=minutely,hourly,alerts&appid=0e6f5398c15d486c091b9db6d8238f4f")
+  echo(response.status)
+  let jsonNode = parseJson(response.body)
+#   echo jsonNode
+  let current = jsonNode["current"]
+  echo current
+  let sunrise = current["sunrise"].getInt
+  var sunriseTime = fromUnix(sunrise)
+  echo sunriseTime.format("HH-mm-ss")
 
 
 
@@ -134,8 +143,10 @@ proc update() =
   minutes.text = time.format("mm")
   seconds.text = time.format("ss")
 
-  closeBtn.updateButton(getMousePosition(), isMouseButtonDown(
-      MouseButton.LEFT.cint))
+  closeBtn.updateButton(
+     getMousePosition(),
+     isMouseButtonDown(MouseButton.LEFT_BUTTON.cint),
+    )
 
 proc draw() =
   beginDrawing()
